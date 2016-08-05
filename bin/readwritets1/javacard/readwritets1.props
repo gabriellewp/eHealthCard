@@ -1,0 +1,10 @@
+#package specification
+#Thu Aug 04 15:08:16 ICT 2016
+masktools-version=3.0
+readwritets1-clazzes=readwritets1.ReadWriteTS1
+readwritets1.ReadWriteTS1-aid=526561645772697465545331
+readwritets1-base=internal
+readwritets1-major=1
+jcop-packages=readwritets1
+readwritets1-aid=726561647772697465747331
+readwritets1-minor=0

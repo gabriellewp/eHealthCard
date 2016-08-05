@@ -1,0 +1,21 @@
+#/term SCComm:2
+#/modetrace=on
+#/atr
+#/card
+/select |ReadWrite
+
+#bacaJenisPasien
+/send 80000001000000
+
+#tulisJenisPasien
+#/send 800100011150617369656E20526177617420496E6170
+/send 80010001#(|"Pasien Rawat Inap")
+
+#bacaJenisPasien
+/send 80000001000000
+
+#bersihkanJenisPasien
+/send 80020001000000
+
+#bacaJenisPasien
+/send 80000001000000
