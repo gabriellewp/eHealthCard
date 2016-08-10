@@ -24,6 +24,10 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 	private static final byte INS_GET_VALID_INDEXS = (byte)0x10;
 	private static final byte INS_PREV_CHECKING = (byte)0x11;
 	private static final byte INS_READ_TIMESTAMP = (byte) 0x12;
+	private static final byte INS_WRITE_TIMESTAMP = (byte)0x13;
+	private static final byte INS_GREATEST_TIMESTAMP = (byte)0x14;
+	private static final byte INS_COMMAND_ONLY = (byte)0x15;
+	
 	
 	// variables
 	private Object[] storageOffset = new Object[(short)5];
@@ -33,7 +37,7 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 		mdCapacity =5;
 		byte[] dataPasien, medrecStatik,medrecDinamikHeadTail, medRecIdx, addressIdx, statusFlag, errorFlag, backUpMedRecIdx, backUpAddressIdx, backUpStatusFlag, ts2FYear, ts2LYear, tsDate, tsMonth, tsHour, tsMinute, tsSecond; ;
 		
-		storage = new Object[(short) (2*mdCapacity + 10)];
+		storage = new Object[(short) 35];
 		
 		dataPasien = new byte[(short) 8652]; //storage 0
 		medrecStatik = new byte[(short) 2145]; //storage 1
@@ -54,7 +58,7 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 		backUpAddressIdx = new byte[(short)mdCapacity];
 		backUpStatusFlag = new byte[(short)mdCapacity];
 		
-		for(i=(short)(mdCapacity+10);i<(short)(2*mdCapacity+10);i++){
+		for(i=(short)(mdCapacity+10);i<(short)35;i++){
 			byte[] timeStamp =  new byte[(short)7];
 			Util.arrayFillNonAtomic(timeStamp, (short) 0, (short) 7, (byte) 0x00);
 			storage[i] = timeStamp;
@@ -272,6 +276,15 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 			return;
 		case INS_READ_TIMESTAMP:
 			readTimeStamp(apdu);
+			return;
+		case INS_WRITE_TIMESTAMP:
+			writeTimeStamp(apdu);
+			return;
+		case INS_GREATEST_TIMESTAMP:
+			findGreatestTimestampIdx(apdu);
+			return;
+		case INS_COMMAND_ONLY:
+			commandOnly(apdu);
 			return;
 		default:
 			ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
@@ -512,8 +525,7 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 			for(i = (short)0;i<(short)10000;i++){
 				x = u;
 			}
-			Util.arrayCopyNonAtomic(buffer, dataOffset, ts, (short)0,(short)7);
-			Util.arrayCopyNonAtomic(buffer,(short)(dataOffset+7),dst,startOffset,bytesRead);
+			Util.arrayCopyNonAtomic(buffer,dataOffset,dst,startOffset,bytesRead);
 			//delay added
 //			for(i = (short)0;i<(short)10000;i++){
 //				x = u;
@@ -544,36 +556,18 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 		statusFlag[idxOfFAT] =  (byte)2;
 		
 		//send response of OK
-		byte[] src = {(byte)'O',(byte)'K'};
-		short offset = (short) 0;
-		short lengthOK = (short) src.length;
-		apdu.setOutgoing();
-        apdu.setOutgoingLength(lengthOK);
-        apdu.sendBytesLong(src, offset, lengthOK);
+		buffer[0] = (byte)'O';
+		buffer[1] = (byte)'K';
+		apdu.setOutgoingAndSend((short)0, (short)2);
+//		byte[] src = {(byte)'O',(byte)'K'};
+//		short offset = (short) 0;
+//		short lengthOK = (short) src.length;
+//		apdu.setOutgoing();
+//        apdu.setOutgoingLength(lengthOK);
+//        apdu.sendBytesLong(src, offset, lengthOK);
 	}
 	
-	public void readTimeStamp(APDU apdu){
-		byte[] buffer = apdu.getBuffer();
-		byte p1 = buffer[ISO7816.OFFSET_P1];
-		if (p1 < 0 || p1 > storage.length)
-			ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
-		short length = (short) (7*mdCapacity);
-		short startOffset = (short) 0;
-		byte[] src = new byte[(short)length];
-		for(short i=0;i<mdCapacity;i++){
-			byte[] timeStamp = (byte[]) storage[p1+mdCapacity+10];
-			Util.arrayCopy(timeStamp, (short)startOffset, src, (short)startOffset, (short)7);
-			startOffset = (short)(startOffset+7);
-		}
-		
-		//7*mdcapcacity ga perlu while bytesread>0
 
-
-		apdu.setOutgoing();
-        apdu.setOutgoingLength(length);
-        apdu.sendBytesLong(src, (short)0, length);
-		
-	}
 	public void updateCardData(APDU apdu){
 		errorFlagChecking(); //prev process evaluation
 		byte[] buffer = apdu.getBuffer();
@@ -792,6 +786,7 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 		apdu.sendBytesLong(src,offset,length);
 		
 	}
+
 	// check if a record is valid, 
 	public boolean isRecordValid(short idxRecord){
 		byte[] statusFlag = (byte[])storage[mdCapacity+5];
@@ -799,6 +794,61 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 			return false;
 		}else{
 			return true; // O = open or C = close
+		}
+		
+	}
+	public void readTimeStamp(APDU apdu){
+		byte[] buffer = apdu.getBuffer();
+		byte p1 = buffer[ISO7816.OFFSET_P1];
+		if (p1 < 0 || p1 > storage.length)
+			ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+		short length = (short) (7*p1);
+		short startOffset = (short) 0;
+		//byte[] src = (byte[]) storage[(short)(0+mdCapacity+10)];
+		
+		for(short i=0;i<p1;i++){
+			byte[] timeStamp = (byte[]) storage[i+mdCapacity+10];
+			Util.arrayCopy(timeStamp, (short)0, buffer, (short)startOffset, (short)7);
+			startOffset = (short)(startOffset+7);
+		}
+		
+		//7*mdcapcacity ga perlu while bytesread>0
+		apdu.setOutgoingAndSend((short)0, length);
+//		
+//		apdu.setOutgoing();
+//        apdu.setOutgoingLength(length);
+//        apdu.sendBytesLong(buffer, (short)0, length);
+		
+	}
+	public void writeTimeStamp(APDU apdu){
+		byte[] buffer = apdu.getBuffer();
+
+		byte p1 = buffer[ISO7816.OFFSET_P1];
+		if (p1 < 0 || p1 > storage.length)
+			ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+		byte[] dst = (byte[]) storage[(short)(10+mdCapacity+p1)];
+
+		
+		
+		short offset = (short)0;
+		
+		short length = (short) 7;
+
+		short bytesRead = apdu.setIncomingAndReceive();
+		short dataOffset = apdu.getOffsetCdata();
+		Util.arrayCopy(buffer, dataOffset, dst, offset, bytesRead);
+		short dataLength = apdu.getIncomingLength();
+		if (dataLength > length)
+			ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+		short messageOffset = bytesRead;
+		if (bytesRead != dataLength) {
+			short received = 0;
+			do {
+				received = apdu.receiveBytes((short) 0);
+				Util.arrayCopyNonAtomic(buffer, (short) 0, dst, messageOffset,
+						received);
+				messageOffset += received;
+			} while (received != 0);
 		}
 		
 	}
@@ -1070,10 +1120,13 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 		apdu.sendBytesLong(src,offset,length);
 		
 	}
-	public short findGreatestTimestampIdx(){
-
+	public void findGreatestTimestampIdx(APDU apdu){
+		byte[] buffer = apdu.getBuffer();
+		byte p1 = buffer[ISO7816.OFFSET_P1];
+		if (p1 < 0 || p1 > storage.length)
+			ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
 		short maxAddress=0;		
-		for(short i=1;i<mdCapacity;i++){
+		for(short i=1;i<p1;i++){
 			byte[] currentTS =(byte[]) storage[(short)(i+mdCapacity+10)];
 			byte[] maxTS = (byte[]) storage[(short)(maxAddress+mdCapacity+10)];
 			if(currentTS[0]>maxTS[0]){ //yeardepan
@@ -1104,7 +1157,8 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 				}
 			}
 		}
-		return maxAddress;
+		buffer[0] = (byte) maxAddress;
+		apdu.setOutgoingAndSend((short)0, (short)1);
 	}
 //	
 	public short findSmallestTimestampIdx(){
@@ -1141,5 +1195,15 @@ public class ReadWriteTS1 extends Applet implements ExtendedLength {
 			}
 		}
 		return minAddress;
+	}
+	
+	public void commandOnly(APDU apdu){
+		byte[] buffer = apdu.getBuffer();
+		byte[] src = new byte[1];
+		
+		src[0] = (byte)0;
+		apdu.setOutgoing();
+        apdu.setOutgoingLength((short)1);
+        apdu.sendBytesLong(src,(short) 0, (short)1);
 	}
 }
